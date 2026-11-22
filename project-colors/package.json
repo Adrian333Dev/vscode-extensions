@@ -1,0 +1,73 @@
+{
+  "name": "project-colors",
+  "displayName": "Project colors",
+  "description": "In a window holding several projects, paints the window in the colour of the project you are working in, through Peacock, and shows the project's name in the status bar.",
+  "publisher": "adrian333dev",
+  "version": "0.2.0",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Adrian333Dev/vscode-extensions" },
+  "engines": { "vscode": "^1.93.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "files": ["extension.js", "colors.js", "icon.png"],
+  "icon": "icon.png",
+  "contributes": {
+    "commands": [
+      { "command": "projectColors.setup", "title": "Set up this workspace", "category": "Project colors" },
+      { "command": "projectColors.changeColor", "title": "Change this project's colour", "category": "Project colors" }
+    ],
+    "menus": {
+      "explorer/context": [{ "command": "projectColors.changeColor", "when": "explorerResourceIsFolder", "group": "z_projectColors" }],
+      "commandPalette": [{ "command": "projectColors.changeColor", "when": "false" }]
+    },
+    "configuration": {
+      "title": "Project colors",
+      "properties": {
+        "projectColors.follow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Paint this window in the colour of the project you are working in. Set by \"Project colors: Set up this workspace\"."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "peacock.darkenLightenPercentage": 10,
+      "peacock.affectTabActiveBackground": false,
+      "peacock.showColorInStatusBar": false,
+      "peacock.excludedSettings": ["statusBarItem.remoteBackground"],
+      "peacock.favoriteColors": [
+        { "name": "Jet", "value": "#0a0908" },
+        { "name": "Charcoal", "value": "#14161a" },
+        { "name": "Gunmetal", "value": "#1b222a" },
+        { "name": "Steel", "value": "#222d30" },
+        { "name": "Wine", "value": "#1b0108" },
+        { "name": "Oxblood", "value": "#360a07" },
+        { "name": "Garnet", "value": "#49111c" },
+        { "name": "Crimson", "value": "#460a0a" },
+        { "name": "Rosewood", "value": "#3a2024" },
+        { "name": "Raspberry", "value": "#35111e" },
+        { "name": "Mahogany", "value": "#221010" },
+        { "name": "Rust", "value": "#4e1b0a" },
+        { "name": "Coffee", "value": "#211103" },
+        { "name": "Bronze", "value": "#2a2009" },
+        { "name": "Ochre", "value": "#412c05" },
+        { "name": "Sepia", "value": "#36281d" },
+        { "name": "Khaki", "value": "#252517" },
+        { "name": "Olive", "value": "#262c0e" },
+        { "name": "Moss", "value": "#112812" },
+        { "name": "Forest", "value": "#06130d" },
+        { "name": "Emerald", "value": "#062b19" },
+        { "name": "Jade", "value": "#10352c" },
+        { "name": "Teal", "value": "#002b31" },
+        { "name": "Ocean", "value": "#000e15" },
+        { "name": "Prussian", "value": "#003049" },
+        { "name": "Navy", "value": "#14213d" },
+        { "name": "Slate", "value": "#2a2c3c" },
+        { "name": "Amethyst", "value": "#231942" },
+        { "name": "Violet", "value": "#321b3e" },
+        { "name": "Aubergine", "value": "#2a0f23" }
+      ],
+      "window.title": "${rootNameShort}"
+    }
+  }
+}

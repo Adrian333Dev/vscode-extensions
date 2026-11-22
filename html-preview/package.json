@@ -1,0 +1,23 @@
+{
+  "name": "html-preview",
+  "displayName": "HTML preview",
+  "description": "Opens any HTML file rendered, in a normal editor tab, and redraws it on every change.",
+  "publisher": "adrian333dev",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Adrian333Dev/vscode-extensions" },
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.js",
+  "files": ["extension.js", "icon.png"],
+  "icon": "icon.png",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "htmlPreview.view",
+        "displayName": "HTML preview",
+        "selector": [{ "filenamePattern": "*.html" }],
+        "priority": "default"
+      }
+    ]
+  }
+}

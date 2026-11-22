@@ -1,0 +1,36 @@
+{
+  "name": "notepad",
+  "displayName": "Notepad",
+  "description": "Titled notes in groups, kept in each project's .notepad/ folder and listed in the project's colour. A note tied to a Claude Code session is sent to it with Ctrl+Enter.",
+  "publisher": "adrian333dev",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Adrian333Dev/vscode-extensions" },
+  "engines": { "vscode": "^1.93.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "files": ["extension.js", "icon.png", "list-icon.svg"],
+  "icon": "icon.png",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "notepad", "title": "Notepad", "icon": "list-icon.svg" }]
+    },
+    "views": {
+      "notepad": [{ "type": "webview", "id": "notepad.list", "name": "Notes" }]
+    },
+    "commands": [
+      { "command": "notepad.newNote", "title": "New note", "category": "Notepad", "icon": "$(new-file)" },
+      { "command": "notepad.newGroup", "title": "New group", "category": "Notepad", "icon": "$(new-folder)" },
+      { "command": "notepad.send", "title": "Send to its session", "category": "Notepad" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "notepad.newNote", "when": "view == notepad.list", "group": "navigation@1" },
+        { "command": "notepad.newGroup", "when": "view == notepad.list", "group": "navigation@2" }
+      ]
+    },
+    "keybindings": [
+      { "command": "notepad.send", "key": "ctrl+enter", "when": "editorTextFocus && resourcePath =~ /\\/\\.notepad\\//" }
+    ]
+  }
+}

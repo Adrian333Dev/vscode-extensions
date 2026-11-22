@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- A browser window showing rendered HTML: the page tag in the middle. -->
+  <rect x="0" y="0" width="256" height="256" rx="44" fill="#16181d"/>
+  <rect x="28" y="40" width="200" height="176" rx="14" fill="#f2f2f2"/>
+  <rect x="28" y="40" width="200" height="34" rx="14" fill="#e44d26"/>
+  <rect x="28" y="60" width="200" height="14" fill="#e44d26"/>
+  <circle cx="50" cy="57" r="6" fill="#f2f2f2"/>
+  <circle cx="70" cy="57" r="6" fill="#f2f2f2"/>
+  <circle cx="90" cy="57" r="6" fill="#f2f2f2"/>
+  <polyline points="96,112 64,145 96,178" fill="none" stroke="#e44d26" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="160,112 192,145 160,178" fill="none" stroke="#e44d26" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="140" y1="104" x2="116" y2="186" stroke="#16181d" stroke-width="12" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- 3 stacked windows, each painted in another project's colour: title bar, activity bar, status bar. -->
+  <rect x="0" y="0" width="256" height="256" rx="44" fill="#16181d"/>
+  <g>
+    <rect x="28" y="30" width="150" height="112" rx="10" fill="#202329"/>
+    <rect x="28" y="30" width="150" height="20" rx="10" fill="#7a2a44"/>
+    <rect x="28" y="40" width="150" height="10" fill="#7a2a44"/>
+    <rect x="28" y="50" width="22" height="80" fill="#a3395b"/>
+    <rect x="28" y="128" width="150" height="14" fill="#7a2a44"/>
+  </g>
+  <g>
+    <rect x="58" y="70" width="150" height="112" rx="10" fill="#202329" stroke="#16181d" stroke-width="6"/>
+    <rect x="58" y="70" width="150" height="20" rx="10" fill="#1d5b7a"/>
+    <rect x="58" y="80" width="150" height="10" fill="#1d5b7a"/>
+    <rect x="58" y="90" width="22" height="80" fill="#2779a3"/>
+    <rect x="58" y="168" width="150" height="14" fill="#1d5b7a"/>
+  </g>
+  <g>
+    <rect x="88" y="110" width="150" height="112" rx="10" fill="#202329" stroke="#16181d" stroke-width="6"/>
+    <rect x="88" y="110" width="150" height="20" rx="10" fill="#1f6b47"/>
+    <rect x="88" y="120" width="150" height="10" fill="#1f6b47"/>
+    <rect x="88" y="130" width="22" height="80" fill="#2a8f5f"/>
+    <rect x="88" y="208" width="150" height="14" fill="#1f6b47"/>
+    <rect x="120" y="146" width="80" height="8" rx="4" fill="#3a3f48"/>
+    <rect x="120" y="162" width="100" height="8" rx="4" fill="#3a3f48"/>
+    <rect x="120" y="178" width="60" height="8" rx="4" fill="#3a3f48"/>
+  </g>
+</svg>
