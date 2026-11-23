@@ -3,12 +3,16 @@
 // switches it to the colour of the project you are working in.
 //
 // - The project is the top-level folder of the active tab's file, or of the active terminal's folder.
-//   The last one focused wins. Nothing open → no colour.
+//   The last one focused wins. Nothing open → no colour. A file or terminal of the workspace itself,
+//   in no project → the workspace: its name on the badge, the window's own colours.
 // - Each project keeps its colour in its own .vscode/settings.json (`peacock.remoteColor` under WSL,
 //   `peacock.color` locally). This extension writes it to the window's settings, and Peacock repaints.
-// - The status bar shows the project's name in capitals, on the project's lighter shade. The remote
-//   (WSL) item next to it is painted the bar's own colour, so only the project badge stands out.
-// - The title bar shows the project's name.
+// - The status bar shows the project's name in capitals, on a lighter shade that stays clear of the bar
+//   (colors.js → badgeShade). The remote (WSL) item next to it is painted the bar's own colour, so only
+//   the project badge stands out.
+// - The title bar names the workspace, then the project, then the active file: `w:main / playground / README.md`;
+//   `w:main / README.md` for a file of the workspace itself. The file part is VS Code's own variable, so a tab
+//   switch inside a project writes nothing; `${separator}` (set to ` / `) drops itself beside an empty one.
 // - A colour changed through Peacock's own commands is saved back into the active project.
 // - A window not set up ("Project colors: Set up this workspace") is left alone.
 const vscode = require('vscode')
@@ -26,7 +30,7 @@ const following = () => vscode.workspace.getConfiguration('projectColors').get('
 // --- colours ---
 
 const colors = require('./colors')
-const { lighten } = colors
+const { lighten, badgeShade } = colors
 const percent = () => vscode.workspace.getConfiguration('peacock').get('darkenLightenPercentage') ?? 10
 const freeColor = (used) => colors.freeColor((vscode.workspace.getConfiguration('peacock').get('favoriteColors') || []).map((f) => f.value), used, percent())
 
@@ -41,17 +45,23 @@ const projects = () => {
   return names.filter((name) => fs.existsSync(path.join(folder.uri.fsPath, name, '.git'))).map((name) => ({ name, dir: path.join(folder.uri.fsPath, name) }))
 }
 
-// The project holding a path, or undefined.
+// The project holding a path; the workspace itself for a path inside the window's folder but in no
+// project; undefined for a path outside it.
 const projectOf = (file) => {
   const folder = root()
   if (!folder || !file) return undefined
   const relative = path.relative(folder.uri.fsPath, file)
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return undefined
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return undefined
   const name = relative.split(path.sep)[0]
-  return projects().find((p) => p.name === name)
+  return projects().find((p) => p.name === name) || workspace()
 }
+const workspace = () => ({ name: path.basename(root().uri.fsPath), dir: root().uri.fsPath, workspace: true })
 
-const colorOf = (project) => colors.colorIn(project.dir, keys())
+// The window title for a project: `w:<workspace>`, the project unless it is the workspace, the active file.
+const titleOf = (project, workspaceName) =>
+  ['w:' + workspaceName, ...(project.workspace ? [] : [project.name]), '${activeEditorShort}'].join('${separator}')
+
+const colorOf = (project) => (project.workspace ? undefined : colors.colorIn(project.dir, keys()))
 const saveColor = (project, color) => colors.saveColorIn(project.dir, keys()[0], color)
 
 // --- painting ---
@@ -70,7 +80,7 @@ const setOurColors = async (color) => {
   const current = { ...(vscode.workspace.getConfiguration('workbench').inspect('colorCustomizations')?.workspaceValue || {}) }
   for (const key of OURS) delete current[key]
   if (color) {
-    current['statusBarItem.warningBackground'] = lighten(color, percent())
+    current['statusBarItem.warningBackground'] = badgeShade(color, percent())
     current['statusBarItem.warningForeground'] = TEXT
     current['statusBarItem.remoteBackground'] = color
   }
@@ -85,15 +95,23 @@ const paint = async (project) => {
     painted = undefined
     await setOurColors(undefined)
     await update('window', 'title', undefined)
+    await update('window', 'titleSeparator', undefined)
     await update('peacock', keys()[0], undefined)
     return
   }
   const color = colorOf(project)
   badge.text = project.name.toUpperCase()
-  badge.tooltip = project.dir
+  badge.tooltip = project.workspace ? `${project.dir}: the workspace, in no project` : project.dir
   badge.backgroundColor = color ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined
   badge.show()
-  await update('window', 'title', project.name)
+  await update('window', 'titleSeparator', ' / ')
+  await update('window', 'title', titleOf(project, workspace().name))
+  if (project.workspace) {
+    painted = undefined
+    await setOurColors(undefined)
+    await update('peacock', keys()[0], undefined)
+    return
+  }
   if (!color) return // a project without a colour leaves the window as it is
   painted = color
   // Ours first: Peacock, reacting to its own key, keeps colours it doesn't manage.
@@ -112,7 +130,7 @@ const anyTabOpen = () => vscode.window.tabGroups.all.some((g) => g.tabs.length)
 const followTab = () => {
   if (!anyTabOpen()) return paint(undefined)
   const project = projectOf(activeTabFile())
-  if (project && project.name !== active?.name) return paint(project)
+  if (project && project.dir !== active?.dir) return paint(project)
 }
 const followTerminal = (terminal) => {
   const cwd = terminal?.shellIntegration?.cwd || terminal?.creationOptions?.cwd
@@ -163,7 +181,7 @@ const changeColor = async (uri) => {
 
 // A colour Peacock wrote that this extension didn't: the user changed it, so the project keeps it.
 const peacockChanged = async () => {
-  if (!following() || !active) return
+  if (!following() || !active || active.workspace) return
   const color = (vscode.workspace.getConfiguration('peacock').inspect(keys()[0])?.workspaceValue || '').toLowerCase()
   if (!color || color === painted) return
   saveColor(active, color)
@@ -191,4 +209,4 @@ exports.deactivate = () => {}
 const report = (error) => console.error('project-colors:', error)
 
 // For tests/extension.test.js: the parts that need no window.
-exports.internal = { lighten, freeColor, projectOf, colorOf, saveColor }
+exports.internal = { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor }

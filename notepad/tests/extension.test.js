@@ -13,7 +13,7 @@ const load = Module._load
 Module._load = function (request, ...rest) {
   return request === 'vscode' ? vscode : load.call(this, request, ...rest)
 }
-const { places, placeOf, listing, sessionOf, headerOf, ignoreNotes } = require('../extension.js').internal
+const { places, placeOf, listing, sessionOf, headerOf } = require('../extension.js').internal
 
 const write = (file, text) => {
   fs.mkdirSync(path.dirname(path.join(scratch, file)), { recursive: true })
@@ -52,15 +52,6 @@ test('a draft is tied by its header, and the header stays when the text is sent'
   assert.strictEqual(sessionOf('session: a3f8c1d2\ntext'), undefined)
   assert.strictEqual(headerOf(draft), '---\nsession: a3f8c1d2\n---\n')
   assert.strictEqual(headerOf('no header'), '')
-})
-
-test('the first note puts .notepad/ in .gitignore and !/.notepad/ in .ignore, once', () => {
-  write('reader/.gitignore', 'node_modules/')
-  const reader = places().find((p) => p.name === 'reader')
-  ignoreNotes(reader)
-  ignoreNotes(reader)
-  assert.strictEqual(fs.readFileSync(path.join(scratch, 'reader', '.gitignore'), 'utf8'), 'node_modules/\n.notepad/\n')
-  assert.strictEqual(fs.readFileSync(path.join(scratch, 'reader', '.ignore'), 'utf8'), '!/.notepad/\n')
 })
 
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }))

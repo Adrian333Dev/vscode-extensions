@@ -4,7 +4,7 @@
 //   <project>/.notepad/<title>.md outside any group. A group is a folder.
 // - A project is a top-level git repo of the opened folder (as project-colors has it), or the opened
 //   folder itself when it is a repo. Notes of the opened folder that belong to no project sit under its
-//   own name. `.notepad/` goes into the project's .gitignore on the first note: notes are this machine's.
+//   own name. `.notepad/` is committed with the project, so notes sync through its repo (the user, 2026-11-23).
 // - Each project's rows sit on its colour (`peacock.remoteColor` or `peacock.color` in its
 //   .vscode/settings.json), lighter and translucent, with light text.
 // - A note whose header names a session (`session: <id>`) is that Claude Code session's draft, made by
@@ -102,18 +102,6 @@ const listing = () =>
     })
     .filter((p) => !p.loose || p.notes.length || p.groups.length)
 
-// `.notepad/` into the place's .gitignore and `!/.notepad/` into .ignore (search still reads notes), once.
-const ignoreNotes = (place) => {
-  if (!isRepo(place.dir)) return
-  for (const [file, line] of [['.gitignore', `${NOTES}/`], ['.ignore', `!/${NOTES}/`]]) {
-    const target = path.join(place.dir, file)
-    let text = ''
-    try { text = fs.readFileSync(target, 'utf8') } catch {}
-    if (text.split('\n').includes(line)) continue
-    fs.writeFileSync(target, text + (text && !text.endsWith('\n') ? '\n' : '') + line + '\n')
-  }
-}
-
 // --- commands ---
 
 const safeName = (name) => name.trim().replace(/[\/\\:*?"<>|]/g, '-')
@@ -146,7 +134,6 @@ const newNote = async (args = {}) => {
   if (!fs.existsSync(file)) {
     fs.mkdirSync(path.dirname(file), { recursive: true })
     fs.writeFileSync(file, '')
-    ignoreNotes(place)
   }
   await vscode.window.showTextDocument(vscode.Uri.file(file))
 }
@@ -157,7 +144,6 @@ const newGroup = async (args = {}) => {
   const name = await vscode.window.showInputBox({ title: 'Group name', prompt: place.name })
   if (!name?.trim()) return
   fs.mkdirSync(path.join(place.dir, NOTES, safeName(name)), { recursive: true })
-  ignoreNotes(place)
   refresh()
 }
 
@@ -292,4 +278,4 @@ exports.deactivate = () => {}
 const report = (error) => vscode.window.showErrorMessage(`Notepad: ${error.message || error}`)
 
 // For tests/extension.test.js: the parts that need no window.
-exports.internal = { places, placeOf, listing, sessionOf, headerOf, ignoreNotes, rgba }
+exports.internal = { places, placeOf, listing, sessionOf, headerOf, rgba }

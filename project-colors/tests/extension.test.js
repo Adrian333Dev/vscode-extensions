@@ -20,7 +20,7 @@ const load = Module._load
 Module._load = function (request, ...rest) {
   return request === 'vscode' ? vscode : load.call(this, request, ...rest)
 }
-const { lighten, freeColor, projectOf, colorOf, saveColor } = require('../extension.js').internal
+const { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor } = require('../extension.js').internal
 
 const project = (name, settingsText) => {
   fs.mkdirSync(path.join(scratch, name, '.git'), { recursive: true })
@@ -46,12 +46,22 @@ test("lighten gives Peacock's own shade (tinycolor2's lighten, run 2026-11-18)",
   near(lighten('#2a2c3c', 10), '#3f425a')
 })
 
-test('a file belongs to the git repo at the top of the window; other folders and outside paths to none', () => {
+test('the badge shade stands clear of the bar: a mid colour is lightened further than a near-black one', () => {
+  near(badgeShade('#06130d', 10), '#123a28') // already clear at Peacock's 10%
+  const step = (hex) => parseInt(badgeShade(hex, 10).slice(5, 7), 16) - parseInt(hex.slice(5, 7), 16)
+  assert.ok(step('#123d7a') > parseInt(lighten('#123d7a', 10).slice(5, 7), 16) - 0x7a, 'Sapphire gets more than 10%')
+})
+
+test('a file belongs to the git repo at the top of the window; other files there to the workspace; outside paths to none', () => {
   project('reader')
   fs.mkdirSync(path.join(scratch, 'notes'), { recursive: true })
   assert.strictEqual(projectOf(path.join(scratch, 'reader', 'src', 'app.js'))?.name, 'reader')
-  assert.strictEqual(projectOf(path.join(scratch, 'notes', 'a.md')), undefined)
-  assert.strictEqual(projectOf(path.join(scratch, 'workspace.md')), undefined)
+  const ws = projectOf(path.join(scratch, 'workspace.md'))
+  assert.strictEqual(ws?.workspace, true)
+  assert.strictEqual(ws.name, path.basename(scratch))
+  assert.strictEqual(projectOf(path.join(scratch, 'notes', 'a.md'))?.workspace, true)
+  assert.strictEqual(projectOf(scratch)?.workspace, true, 'a terminal at the top')
+  assert.strictEqual(colorOf(ws), undefined, 'the workspace has no colour of its own')
   assert.strictEqual(projectOf('/elsewhere/file.js'), undefined)
 })
 
@@ -81,3 +91,8 @@ test('a free colour is the favourite farthest from those in use, and none is lef
 })
 
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }))
+
+test('the title names the workspace, then the project unless it is the workspace, then the file', () => {
+  assert.strictEqual(titleOf({ name: 'playground', dir: '/w/playground' }, 'main'), 'w:main${separator}playground${separator}${activeEditorShort}')
+  assert.strictEqual(titleOf({ name: 'main', dir: '/w', workspace: true }, 'main'), 'w:main${separator}${activeEditorShort}')
+})

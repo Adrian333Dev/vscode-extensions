@@ -44,6 +44,15 @@ const distance = (a, b, percent) => {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2])
 }
 
+// The badge's shade: lightened by `percent`, and further until it looks clearly lighter than the bar,
+// since the same HSL step that stands out on a near-black colour barely shows on a mid one.
+const BADGE_STEP = 0.13 // OKLab lightness; near-black colours get ~0.14 from Peacock's 10%
+const badgeShade = (hex, percent) => {
+  let p = percent
+  while (p < 60 && oklab(lighten(hex, p))[0] - oklab(hex)[0] < BADGE_STEP) p += 2
+  return lighten(hex, p)
+}
+
 // The favourite farthest from every colour in use, judged on the lighter shade, where dark colours differ.
 const freeColor = (favorites, used, percent) => {
   const left = favorites.map((c) => c.toLowerCase()).filter((c) => !used.includes(c))
@@ -80,4 +89,4 @@ const saveColorIn = (dir, key, color) => {
   fs.writeFileSync(file, text)
 }
 
-module.exports = { lighten, freeColor, colorIn, saveColorIn }
+module.exports = { lighten, badgeShade, freeColor, colorIn, saveColorIn }
