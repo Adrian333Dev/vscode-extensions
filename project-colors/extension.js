@@ -15,7 +15,10 @@
 //   switch inside a project writes nothing; `${separator}` (set to ` / `) drops itself beside an empty one.
 // - A colour changed through Peacock's own commands is saved back into the active project.
 // - A window not set up ("Project colors: Set up this workspace") is left alone.
+// - Its "bash (Flow)" terminal profile, set as the default by flow-v2 (vscode/settings.json), gives each new
+//   terminal its own `FLOW_TERMINAL` id; see `terminalProfile` below. It works in any window, set up or not.
 const vscode = require('vscode')
+const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 
@@ -57,9 +60,10 @@ const projectOf = (file) => {
 }
 const workspace = () => ({ name: path.basename(root().uri.fsPath), dir: root().uri.fsPath, workspace: true })
 
-// The window title for a project: `w:<workspace>`, the project unless it is the workspace, the active file.
-const titleOf = (project, workspaceName) =>
-  ['w:' + workspaceName, ...(project.workspace ? [] : [project.name]), '${activeEditorShort}'].join('${separator}')
+// The window title: the active file's path from the workspace folder, so it starts with its project
+// (`flow-v2/plugin/skills/visualize/SKILL.md`), then `w:<workspace>`. A file name alone said nothing
+// when several files share it (the user, 2026-11-24).
+const titleOf = (project, workspaceName) => ['${activeEditorMedium}', 'w:' + workspaceName].join('${separator}')
 
 const colorOf = (project) => (project.workspace ? undefined : colors.colorIn(project.dir, keys()))
 const saveColor = (project, color) => colors.saveColorIn(project.dir, keys()[0], color)
@@ -138,6 +142,16 @@ const followTerminal = (terminal) => {
   if (project) return paint(project)
 }
 
+// --- terminals ---
+
+// VS Code revives a terminal with the environment it was created with, so the id survives a window close or a
+// reboot: flow-v2's hooks file the terminal's Claude Code session under it, and ~/.bashrc resumes that session
+// in the revived shell. Splits and `+` open on the default profile too. No shellPath: VS Code starts the
+// machine's default shell. No cwd: VS Code's own choice stands (the window's folder, a split's parent's folder).
+const integrated = new WeakSet() // terminals whose shell integration has started
+const PROFILE = 'projectColors.flowTerminal' // package.json's contributes.terminal.profiles id
+const terminalProfile = () => new vscode.TerminalProfile({ env: { FLOW_TERMINAL: crypto.randomUUID() } })
+
 // --- commands ---
 
 const setup = async () => {
@@ -189,6 +203,8 @@ const peacockChanged = async () => {
 }
 
 exports.activate = (context) => {
+  // First: the default terminal waits on this, and fails to open if anything before it throws.
+  context.subscriptions.push(vscode.window.registerTerminalProfileProvider(PROFILE, { provideTerminalProfile: terminalProfile }))
   badge = vscode.window.createStatusBarItem('projectColors.name', vscode.StatusBarAlignment.Left, 1000)
   badge.name = 'Project name'
   context.subscriptions.push(
@@ -198,6 +214,13 @@ exports.activate = (context) => {
     vscode.window.tabGroups.onDidChangeTabs(() => followTab()?.catch(report)),
     vscode.window.tabGroups.onDidChangeTabGroups(() => followTab()?.catch(report)),
     vscode.window.onDidChangeActiveTerminal((t) => followTerminal(t)?.catch(report)),
+    // A terminal opened on a profile knows its folder only once shell integration starts. The event also
+    // fires on each `cd`, which is left alone, as before.
+    vscode.window.onDidChangeTerminalShellIntegration((e) => {
+      if (integrated.has(e.terminal)) return
+      integrated.add(e.terminal)
+      if (e.terminal === vscode.window.activeTerminal) followTerminal(e.terminal)?.catch(report)
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(`peacock.${keys()[0]}`)) peacockChanged().catch(report)
     }),
@@ -209,4 +232,4 @@ exports.deactivate = () => {}
 const report = (error) => console.error('project-colors:', error)
 
 // For tests/extension.test.js: the parts that need no window.
-exports.internal = { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor }
+exports.internal = { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor, PROFILE, terminalProfile }

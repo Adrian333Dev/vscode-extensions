@@ -10,6 +10,7 @@ const Module = require('module')
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'project-colors-'))
 const settings = { peacock: { darkenLightenPercentage: 10, favoriteColors: [{ value: '#06130d' }, { value: '#003049' }, { value: '#4e1b0a' }, { value: '#0a0908' }] } }
 const vscode = {
+  TerminalProfile: class { constructor(options) { this.options = options } },
   env: { remoteName: 'wsl' },
   workspace: {
     workspaceFolders: [{ uri: { fsPath: scratch } }],
@@ -20,7 +21,7 @@ const load = Module._load
 Module._load = function (request, ...rest) {
   return request === 'vscode' ? vscode : load.call(this, request, ...rest)
 }
-const { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor } = require('../extension.js').internal
+const { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor, PROFILE, terminalProfile } = require('../extension.js').internal
 
 const project = (name, settingsText) => {
   fs.mkdirSync(path.join(scratch, name, '.git'), { recursive: true })
@@ -93,6 +94,19 @@ test('a free colour is the favourite farthest from those in use, and none is lef
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }))
 
 test('the title names the workspace, then the project unless it is the workspace, then the file', () => {
-  assert.strictEqual(titleOf({ name: 'playground', dir: '/w/playground' }, 'main'), 'w:main${separator}playground${separator}${activeEditorShort}')
-  assert.strictEqual(titleOf({ name: 'main', dir: '/w', workspace: true }, 'main'), 'w:main${separator}${activeEditorShort}')
+  assert.strictEqual(titleOf({ name: 'playground', dir: '/w/playground' }, 'main'), '${activeEditorMedium}${separator}w:main')
+  assert.strictEqual(titleOf({ name: 'main', dir: '/w', workspace: true }, 'main'), '${activeEditorMedium}${separator}w:main')
+})
+
+test("each terminal on the profile gets its own FLOW_TERMINAL id, and VS Code's own shell and folder", () => {
+  const [a, b] = [terminalProfile(), terminalProfile()]
+  assert.match(a.options.env.FLOW_TERMINAL, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+  assert.notStrictEqual(a.options.env.FLOW_TERMINAL, b.options.env.FLOW_TERMINAL)
+  assert.deepStrictEqual(Object.keys(a.options), ['env'], 'a shellPath or cwd here would override the default shell, or a split\'s folder')
+})
+
+test('package.json contributes the profile the code registers, under the title flow-v2 sets as the default', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
+  assert.deepStrictEqual(manifest.contributes.terminal.profiles.map((p) => [p.id, p.title]), [[PROFILE, 'bash (Flow)']])
+  assert.ok(manifest.activationEvents.includes(`onTerminalProfile:${PROFILE}`))
 })

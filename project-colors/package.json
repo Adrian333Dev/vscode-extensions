@@ -1,17 +1,20 @@
 {
   "name": "project-colors",
   "displayName": "Project colors",
-  "description": "In a window holding several projects, paints the window in the colour of the project you are working in, through Peacock, and shows the project's name in the status bar.",
+  "description": "In a window holding several projects, paints the window in the colour of the project you are working in, through Peacock, and shows the project's name in the status bar. Its \"bash (Flow)\" terminal profile names each terminal, so a revived one can resume its Claude Code session.",
   "publisher": "adrian333dev",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/Adrian333Dev/vscode-extensions" },
   "engines": { "vscode": "^1.93.0" },
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": ["onStartupFinished", "onTerminalProfile:projectColors.flowTerminal"],
   "main": "./extension.js",
   "files": ["extension.js", "colors.js", "icon.png"],
   "icon": "icon.png",
   "contributes": {
+    "terminal": {
+      "profiles": [{ "id": "projectColors.flowTerminal", "title": "bash (Flow)", "icon": "terminal-bash" }]
+    },
     "commands": [
       { "command": "projectColors.setup", "title": "Set up this workspace", "category": "Project colors" },
       { "command": "projectColors.changeColor", "title": "Change this project's colour", "category": "Project colors" }
