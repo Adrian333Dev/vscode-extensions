@@ -3,7 +3,7 @@
   "displayName": "Project colors",
   "description": "In a window holding several projects, paints the window in the colour of the project you are working in, through Peacock, with its accent on the project name in the status bar. Its \"bash (Flow)\" terminal profile names each terminal, so a revived one can resume its Claude Code session.",
   "publisher": "adrian333dev",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -84,7 +84,8 @@
         "activityBar.activeBorder",
         "activityBarTop.activeBorder",
         "activityBarBadge.background",
-        "activityBarBadge.foreground"
+        "activityBarBadge.foreground",
+        "tab.activeBorder"
       ],
       "peacock.favoriteColors": [
         {

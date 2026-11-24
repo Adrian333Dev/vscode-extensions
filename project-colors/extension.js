@@ -9,16 +9,19 @@
 //   `peacock.color` locally). This extension writes it to the window's settings, and Peacock repaints.
 // - Each colour has an accent: the one paired with it in the favourites (`accent` beside `value`), else one
 //   derived from it (colors.js → accentOf). The status bar shows the project's name in capitals on the
-//   accent, as far left as an extension can put it (right after the remote item); the active tab's top line,
-//   the activity bar's active line and its counts take the accent too. The remote (WSL) item is painted the
-//   bar's own colour, so only the project badge stands out.
+//   accent, as far left as an extension can put it (right after the remote item); the active tab's bottom
+//   line (the theme's divider between tab and editor) and the activity bar's active line take the accent too.
+//   The activity bar's counts are a light neutral: most accents share their colour's hue, and a count in one
+//   blends into the bar (the user, 2026-11-24). The remote (WSL) item is painted the bar's own colour, so
+//   only the project badge stands out.
 // - The accent is saved into the project's .vscode/settings.json as `projectColors.accent`, beside its
 //   colour, where flow's terminal band reads it: on every paint, and when a colour is set or changed.
 // - The title bar is VS Code's own (the user, 2026-11-24: reset it); painting clears any title it once set.
 // - A colour changed through Peacock's own commands is saved back into the active project.
 // - A window not set up ("Project colors: Set up this workspace") is left alone.
-// - Its "bash (Flow)" terminal profile, set as the default by flow-v2 (vscode/settings.json), gives each new
-//   terminal its own `FLOW_TERMINAL` id; see `terminalProfile` below. It works in any window, set up or not.
+// - Its "bash (Flow)" terminal profile gives each new terminal its own `FLOW_TERMINAL` id; see `terminalProfile`
+//   below. It works in any window, set up or not. Not the default for now: as the default it broke terminal
+//   reattach on reload (flow-v2's TASK-21).
 const vscode = require('vscode')
 const crypto = require('crypto')
 const fs = require('fs')
@@ -28,7 +31,7 @@ const path = require('path')
 // (package.json), so Peacock neither overwrites nor clears them.
 const OURS = [
   'statusBarItem.warningBackground', 'statusBarItem.warningForeground', 'statusBarItem.remoteBackground',
-  'tab.activeBorderTop', 'activityBar.activeBorder', 'activityBarTop.activeBorder',
+  'tab.activeBorder', 'activityBar.activeBorder', 'activityBarTop.activeBorder',
   'activityBarBadge.background', 'activityBarBadge.foreground',
 ]
 
@@ -83,42 +86,56 @@ const saveColor = (project, color) => {
 let badge
 let active // the project the window is painted for
 let painted // the colour last written to Peacock
+let replaced // the window's colour before that write
+
+// Peacock, on any change to its settings, writes back the colour it read at that moment, which can be the
+// window's colour from before our paint (on a reload: the last project's). Only a colour that is neither
+// ours nor that old one is the user's choice.
+const isUsersChoice = (color, ours, old) => Boolean(color) && color !== ours && color !== old
+const windowColor = () => (vscode.workspace.getConfiguration('peacock').inspect(keys()[0])?.workspaceValue || '').toLowerCase() || undefined
 
 const update = async (section, key, value) => {
   const config = vscode.workspace.getConfiguration(section)
   if (JSON.stringify(config.inspect(key)?.workspaceValue) !== JSON.stringify(value)) await config.update(key, value, vscode.ConfigurationTarget.Workspace)
 }
 
+// The activity bar counts' colour: Peacock's own for the bar's icons.
+const COUNT = '#e7e7e7'
+// Painted by 0.4.0 and earlier, cleared with ours so no window keeps it.
+const RETIRED = ['tab.activeBorderTop']
+
 // Our colours for a project colour: the badge (a warning item) and the accent lines on the accent, the
-// remote item on the bar's own colour.
+// remote item on the bar's own colour, the counts neutral.
 const ourColors = (color) => {
   const accent = accentOf(color)
   return {
     'statusBarItem.warningBackground': accent,
     'statusBarItem.warningForeground': ink(accent),
     'statusBarItem.remoteBackground': color,
-    'tab.activeBorderTop': accent,
+    'tab.activeBorder': accent,
     'activityBar.activeBorder': accent,
     'activityBarTop.activeBorder': accent,
-    'activityBarBadge.background': accent,
-    'activityBarBadge.foreground': ink(accent),
+    'activityBarBadge.background': COUNT,
+    'activityBarBadge.foreground': ink(COUNT),
   }
 }
 
 // Ours, merged into the window's colour settings, which Peacock also writes; none for no colour.
 const setOurColors = async (color) => {
   const current = { ...(vscode.workspace.getConfiguration('workbench').inspect('colorCustomizations')?.workspaceValue || {}) }
-  for (const key of OURS) delete current[key]
+  for (const key of [...OURS, ...RETIRED]) delete current[key]
   if (color) Object.assign(current, ourColors(color))
   await update('workbench', 'colorCustomizations', Object.keys(current).length ? current : undefined)
 }
 
 const paint = async (project) => {
   if (!following()) return
+  // Both before the first await: a Peacock event landing mid-paint must find them set together.
   active = project
+  replaced = windowColor()
+  painted = project && !project.workspace ? colorOf(project) : undefined
   if (!project) {
     badge.hide()
-    painted = undefined
     await setOurColors(undefined)
     await update('window', 'title', undefined)
     await update('window', 'titleSeparator', undefined)
@@ -133,13 +150,11 @@ const paint = async (project) => {
   await update('window', 'titleSeparator', undefined)
   await update('window', 'title', undefined)
   if (project.workspace) {
-    painted = undefined
     await setOurColors(undefined)
     await update('peacock', keys()[0], undefined)
     return
   }
   if (!color) return // a project without a colour leaves the window as it is
-  painted = color
   saveAccent(project, color)
   // Ours first: Peacock, reacting to its own key, keeps colours it doesn't manage.
   await setOurColors(color)
@@ -220,8 +235,8 @@ const changeColor = async (uri) => {
 // A colour Peacock wrote that this extension didn't: the user changed it, so the project keeps it.
 const peacockChanged = async () => {
   if (!following() || !active || active.workspace) return
-  const color = (vscode.workspace.getConfiguration('peacock').inspect(keys()[0])?.workspaceValue || '').toLowerCase()
-  if (!color || color === painted) return
+  const color = windowColor()
+  if (!isUsersChoice(color, painted, replaced)) return
   saveColor(active, color)
   await paint(active)
 }
@@ -258,4 +273,4 @@ exports.deactivate = () => {}
 const report = (error) => console.error('project-colors:', error)
 
 // For tests/extension.test.js: the parts that need no window.
-exports.internal = { lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile }
+exports.internal = { isUsersChoice, lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile }

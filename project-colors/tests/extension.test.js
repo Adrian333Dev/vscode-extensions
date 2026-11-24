@@ -30,7 +30,7 @@ const load = Module._load
 Module._load = function (request, ...rest) {
   return request === 'vscode' ? vscode : load.call(this, request, ...rest)
 }
-const { lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile } = require('../extension.js').internal
+const { isUsersChoice, lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile } = require('../extension.js').internal
 
 const project = (name, settingsText) => {
   fs.mkdirSync(path.join(scratch, name, '.git'), { recursive: true })
@@ -69,21 +69,21 @@ test('the text on an accent is black or white, whichever has the higher contrast
   for (const dark of ['#06130d', '#1b0108', '#0e1729', '#7c3aed', '#b91c1c']) assert.strictEqual(ink(dark), '#ffffff', dark)
 })
 
-test('a project colour paints the badge, the active tab and activity bar lines and the activity bar count in its accent', () => {
+test('a project colour paints the badge and the active tab and activity bar lines in its accent, the counts neutral', () => {
   assert.deepStrictEqual(ourColors('#06130d'), {
     'statusBarItem.warningBackground': '#34d399',
     'statusBarItem.warningForeground': '#000000',
     'statusBarItem.remoteBackground': '#06130d',
-    'tab.activeBorderTop': '#34d399',
+    'tab.activeBorder': '#34d399',
     'activityBar.activeBorder': '#34d399',
     'activityBarTop.activeBorder': '#34d399',
-    'activityBarBadge.background': '#34d399',
+    'activityBarBadge.background': '#e7e7e7',
     'activityBarBadge.foreground': '#000000',
   })
   assert.deepStrictEqual(Object.keys(ourColors('#003049')).sort(), [...OURS].sort(), 'every key painted is one the extension clears')
 })
 
-test("our colours replace our old ones and are cleared without touching Peacock's", async () => {
+test("our colours replace our old ones, retired ones included, and are cleared without touching Peacock's", async () => {
   settings.workbench.colorCustomizations = { 'titleBar.activeBackground': '#06130d', 'statusBarItem.warningBackground': '#123a28', 'tab.activeBorderTop': '#ffffff' }
   await setOurColors('#06130d')
   assert.deepStrictEqual(settings.workbench.colorCustomizations, { 'titleBar.activeBackground': '#06130d', ...ourColors('#06130d') })
@@ -176,7 +176,7 @@ test("the favourites are the 17 approved pairs, Peacock leaves the colours it ma
     ['Navy', '#0e1729', '#818cf8'], ['Aubergine', '#2a0f23', '#e879f9'],
   ])
   // Peacock 4.5.1's ColorSettings: it rewrites or deletes each of these on every repaint unless excluded.
-  const peacocks = ['statusBarItem.remoteBackground', 'activityBar.activeBorder', 'activityBarTop.activeBorder', 'activityBarBadge.background', 'activityBarBadge.foreground']
+  const peacocks = ['statusBarItem.remoteBackground', 'activityBar.activeBorder', 'activityBarTop.activeBorder', 'activityBarBadge.background', 'activityBarBadge.foreground', 'tab.activeBorder']
   assert.deepStrictEqual(OURS.filter((k) => peacocks.includes(k)).sort(), [...defaults['peacock.excludedSettings']].sort())
   assert.strictEqual(manifest.contributes.configuration.properties['projectColors.accent']?.type, 'string')
 })
@@ -185,4 +185,13 @@ test('package.json contributes the profile the code registers, under the title f
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
   assert.deepStrictEqual(manifest.contributes.terminal.profiles.map((p) => [p.id, p.title]), [[PROFILE, 'bash (Flow)']])
   assert.ok(manifest.activationEvents.includes(`onTerminalProfile:${PROFILE}`))
+})
+
+test("a colour Peacock writes back is the user's choice only when it is neither ours nor the window's old one", () => {
+  // The reload of 2026-11-24: flow-v2 painting over reader's leftover colour, Peacock echoing the leftover.
+  assert.strictEqual(isUsersChoice('#090b0c', '#06130d', '#090b0c'), false, "the old colour echoed back")
+  assert.strictEqual(isUsersChoice('#06130d', '#06130d', '#090b0c'), false, 'our own write')
+  assert.strictEqual(isUsersChoice('#221010', '#06130d', '#090b0c'), true, 'a colour picked through Peacock')
+  assert.strictEqual(isUsersChoice('#221010', undefined, '#090b0c'), true, 'a first colour for a project with none')
+  assert.strictEqual(isUsersChoice(undefined, '#06130d', '#090b0c'), false, 'a cleared colour')
 })
