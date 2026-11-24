@@ -7,12 +7,14 @@
 //   in no project → the workspace: its name on the badge, the window's own colours.
 // - Each project keeps its colour in its own .vscode/settings.json (`peacock.remoteColor` under WSL,
 //   `peacock.color` locally). This extension writes it to the window's settings, and Peacock repaints.
-// - The status bar shows the project's name in capitals, on a lighter shade that stays clear of the bar
-//   (colors.js → badgeShade). The remote (WSL) item next to it is painted the bar's own colour, so only
-//   the project badge stands out.
-// - The title bar names the workspace, then the project, then the active file: `w:main / playground / README.md`;
-//   `w:main / README.md` for a file of the workspace itself. The file part is VS Code's own variable, so a tab
-//   switch inside a project writes nothing; `${separator}` (set to ` / `) drops itself beside an empty one.
+// - Each colour has an accent: the one paired with it in the favourites (`accent` beside `value`), else one
+//   derived from it (colors.js → accentOf). The status bar shows the project's name in capitals on the
+//   accent, as far left as an extension can put it (right after the remote item); the active tab's top line,
+//   the activity bar's active line and its counts take the accent too. The remote (WSL) item is painted the
+//   bar's own colour, so only the project badge stands out.
+// - The accent is saved into the project's .vscode/settings.json as `projectColors.accent`, beside its
+//   colour, where flow's terminal band reads it: on every paint, and when a colour is set or changed.
+// - The title bar is VS Code's own (the user, 2026-11-24: reset it); painting clears any title it once set.
 // - A colour changed through Peacock's own commands is saved back into the active project.
 // - A window not set up ("Project colors: Set up this workspace") is left alone.
 // - Its "bash (Flow)" terminal profile, set as the default by flow-v2 (vscode/settings.json), gives each new
@@ -22,8 +24,13 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 
-const TEXT = '#e7e7e7' // Peacock's light text on a dark colour
-const OURS = ['statusBarItem.warningBackground', 'statusBarItem.warningForeground', 'statusBarItem.remoteBackground']
+// The colours this extension writes. Those Peacock also manages are in its `peacock.excludedSettings`
+// (package.json), so Peacock neither overwrites nor clears them.
+const OURS = [
+  'statusBarItem.warningBackground', 'statusBarItem.warningForeground', 'statusBarItem.remoteBackground',
+  'tab.activeBorderTop', 'activityBar.activeBorder', 'activityBarTop.activeBorder',
+  'activityBarBadge.background', 'activityBarBadge.foreground',
+]
 
 // Under a remote (WSL, SSH) Peacock paints from remoteColor, locally from color.
 const keys = () => (vscode.env.remoteName ? ['remoteColor', 'color'] : ['color', 'remoteColor'])
@@ -33,9 +40,11 @@ const following = () => vscode.workspace.getConfiguration('projectColors').get('
 // --- colours ---
 
 const colors = require('./colors')
-const { lighten, badgeShade } = colors
+const { lighten, ink } = colors
 const percent = () => vscode.workspace.getConfiguration('peacock').get('darkenLightenPercentage') ?? 10
-const freeColor = (used) => colors.freeColor((vscode.workspace.getConfiguration('peacock').get('favoriteColors') || []).map((f) => f.value), used, percent())
+const favorites = () => vscode.workspace.getConfiguration('peacock').get('favoriteColors') || []
+const freeColor = (used) => colors.freeColor(favorites().map((f) => f.value), used, percent())
+const accentOf = (color) => colors.accentOf(color, favorites())
 
 // --- projects ---
 
@@ -60,13 +69,14 @@ const projectOf = (file) => {
 }
 const workspace = () => ({ name: path.basename(root().uri.fsPath), dir: root().uri.fsPath, workspace: true })
 
-// The window title: the active file's path from the workspace folder, so it starts with its project
-// (`flow-v2/plugin/skills/visualize/SKILL.md`), then `w:<workspace>`. A file name alone said nothing
-// when several files share it (the user, 2026-11-24).
-const titleOf = (project, workspaceName) => ['${activeEditorMedium}', 'w:' + workspaceName].join('${separator}')
 
 const colorOf = (project) => (project.workspace ? undefined : colors.colorIn(project.dir, keys()))
-const saveColor = (project, color) => colors.saveColorIn(project.dir, keys()[0], color)
+// The accent goes only into a project's own settings: the workspace's hold the window's colours.
+const saveAccent = (project, color) => !project.workspace && color && colors.saveAccentIn(project.dir, accentOf(color))
+const saveColor = (project, color) => {
+  colors.saveColorIn(project.dir, keys()[0], color)
+  saveAccent(project, color)
+}
 
 // --- painting ---
 
@@ -79,15 +89,27 @@ const update = async (section, key, value) => {
   if (JSON.stringify(config.inspect(key)?.workspaceValue) !== JSON.stringify(value)) await config.update(key, value, vscode.ConfigurationTarget.Workspace)
 }
 
-// Our 3 colours, merged into the window's colour settings, which Peacock also writes.
+// Our colours for a project colour: the badge (a warning item) and the accent lines on the accent, the
+// remote item on the bar's own colour.
+const ourColors = (color) => {
+  const accent = accentOf(color)
+  return {
+    'statusBarItem.warningBackground': accent,
+    'statusBarItem.warningForeground': ink(accent),
+    'statusBarItem.remoteBackground': color,
+    'tab.activeBorderTop': accent,
+    'activityBar.activeBorder': accent,
+    'activityBarTop.activeBorder': accent,
+    'activityBarBadge.background': accent,
+    'activityBarBadge.foreground': ink(accent),
+  }
+}
+
+// Ours, merged into the window's colour settings, which Peacock also writes; none for no colour.
 const setOurColors = async (color) => {
   const current = { ...(vscode.workspace.getConfiguration('workbench').inspect('colorCustomizations')?.workspaceValue || {}) }
   for (const key of OURS) delete current[key]
-  if (color) {
-    current['statusBarItem.warningBackground'] = badgeShade(color, percent())
-    current['statusBarItem.warningForeground'] = TEXT
-    current['statusBarItem.remoteBackground'] = color
-  }
+  if (color) Object.assign(current, ourColors(color))
   await update('workbench', 'colorCustomizations', Object.keys(current).length ? current : undefined)
 }
 
@@ -108,8 +130,8 @@ const paint = async (project) => {
   badge.tooltip = project.workspace ? `${project.dir}: the workspace, in no project` : project.dir
   badge.backgroundColor = color ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined
   badge.show()
-  await update('window', 'titleSeparator', ' / ')
-  await update('window', 'title', titleOf(project, workspace().name))
+  await update('window', 'titleSeparator', undefined)
+  await update('window', 'title', undefined)
   if (project.workspace) {
     painted = undefined
     await setOurColors(undefined)
@@ -118,6 +140,7 @@ const paint = async (project) => {
   }
   if (!color) return // a project without a colour leaves the window as it is
   painted = color
+  saveAccent(project, color)
   // Ours first: Peacock, reacting to its own key, keeps colours it doesn't manage.
   await setOurColors(color)
   await update('peacock', keys()[0], color)
@@ -172,6 +195,7 @@ const setup = async () => {
       used.push(color)
     }
   }
+  for (const p of all) saveAccent(p, colorOf(p))
   active = undefined
   await followTab()
 }
@@ -205,7 +229,9 @@ const peacockChanged = async () => {
 exports.activate = (context) => {
   // First: the default terminal waits on this, and fails to open if anything before it throws.
   context.subscriptions.push(vscode.window.registerTerminalProfileProvider(PROFILE, { provideTerminalProfile: terminalProfile }))
-  badge = vscode.window.createStatusBarItem('projectColors.name', vscode.StatusBarAlignment.Left, 1000)
+  // VS Code's remote item (`WSL: Ubuntu`) has priority Number.POSITIVE_INFINITY; the highest an extension can
+  // pass is MAX_SAFE_INTEGER (Infinity reaches the window as JSON, null), which puts the badge right after it.
+  badge = vscode.window.createStatusBarItem('projectColors.name', vscode.StatusBarAlignment.Left, Number.MAX_SAFE_INTEGER)
   badge.name = 'Project name'
   context.subscriptions.push(
     badge,
@@ -232,4 +258,4 @@ exports.deactivate = () => {}
 const report = (error) => console.error('project-colors:', error)
 
 // For tests/extension.test.js: the parts that need no window.
-exports.internal = { lighten, badgeShade, freeColor, projectOf, titleOf, colorOf, saveColor, PROFILE, terminalProfile }
+exports.internal = { lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile }

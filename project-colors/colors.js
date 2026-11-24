@@ -10,18 +10,21 @@ const toRgb = (hex) => {
 }
 const toHex = (rgb) => '#' + rgb.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('')
 
-// Peacock's lighten (tinycolor2): add the percentage to HSL lightness.
-const lighten = (hex, percent) => {
+// HSL, each part 0 to 1.
+const toHsl = (hex) => {
   const [r, g, b] = toRgb(hex)
   const max = Math.max(r, g, b), min = Math.min(r, g, b)
-  let h = 0, s = 0, l = (max + min) / 2
+  let h = 0, s = 0
+  const l = (max + min) / 2
   if (max !== min) {
     const d = max - min
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
     h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
     h /= 6
   }
-  l = Math.min(1, l + percent / 100)
+  return [h, s, l]
+}
+const fromHsl = (h, s, l) => {
   if (s === 0) return toHex([l, l, l])
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q
   const hue = (t) => {
@@ -29,6 +32,36 @@ const lighten = (hex, percent) => {
     return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p
   }
   return toHex([hue(h + 1 / 3), hue(h), hue(h - 1 / 3)])
+}
+
+// Peacock's lighten (tinycolor2): add the percentage to HSL lightness.
+const lighten = (hex, percent) => {
+  const [h, s, l] = toHsl(hex)
+  return fromHsl(h, s, Math.min(1, l + percent / 100))
+}
+
+// The accent of a project colour: the one paired with it in the favourites (`accent` beside `value`), else
+// one derived from it (its hue at HSL S80% L60%; a grey, under S25%, gives silver), so a colour picked by
+// hand still gets one. The window shows it (status-bar badge, active tab and activity bar lines, activity
+// bar count) and flow's terminal band reads it from `projectColors.accent`.
+const SILVER = '#d4d8de'
+const derivedAccent = (hex) => {
+  const [h, s] = toHsl(hex)
+  return s < 0.25 ? SILVER : fromHsl(h, 0.8, 0.6)
+}
+const accentOf = (hex, favorites = []) => {
+  const pair = favorites.find((f) => f?.accent && f.value?.toLowerCase() === hex.toLowerCase())
+  return pair ? pair.accent.toLowerCase() : derivedAccent(hex)
+}
+
+// Black or white, whichever stands out more on `background` (WCAG contrast).
+const luminance = (hex) => {
+  const [r, g, b] = toRgb(hex).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+const ink = (background) => {
+  const l = luminance(background)
+  return (l + 0.05) / 0.05 > 1.05 / (l + 0.05) ? '#000000' : '#ffffff'
 }
 
 // OKLab, where distance matches how different 2 colours look.
@@ -44,15 +77,6 @@ const distance = (a, b, percent) => {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2])
 }
 
-// The badge's shade: lightened by `percent`, and further until it looks clearly lighter than the bar,
-// since the same HSL step that stands out on a near-black colour barely shows on a mid one.
-const BADGE_STEP = 0.13 // OKLab lightness; near-black colours get ~0.14 from Peacock's 10%
-const badgeShade = (hex, percent) => {
-  let p = percent
-  while (p < 60 && oklab(lighten(hex, p))[0] - oklab(hex)[0] < BADGE_STEP) p += 2
-  return lighten(hex, p)
-}
-
 // The favourite farthest from every colour in use, judged on the lighter shade, where dark colours differ.
 const freeColor = (favorites, used, percent) => {
   const left = favorites.map((c) => c.toLowerCase()).filter((c) => !used.includes(c))
@@ -63,30 +87,49 @@ const freeColor = (favorites, used, percent) => {
 
 const settingsFile = (dir) => path.join(dir, '.vscode', 'settings.json')
 
+const quoted = (name) => `"${name.replace(/\./g, '\\.')}"`
+const read = (dir) => {
+  try { return fs.readFileSync(settingsFile(dir), 'utf8') } catch { return undefined }
+}
+
 // The project's own colour under the first of `keys` it holds (remoteColor, color). Read from the file:
 // VS Code doesn't read settings in a subfolder.
 const colorIn = (dir, keys) => {
-  let text
-  try { text = fs.readFileSync(settingsFile(dir), 'utf8') } catch { return undefined }
+  const text = read(dir)
+  if (!text) return undefined
   for (const key of keys) {
-    const found = new RegExp(`"peacock\\.${key}"\\s*:\\s*"#?([0-9a-fA-F]{3,8})"`).exec(text)
+    const found = new RegExp(`${quoted(`peacock.${key}`)}\\s*:\\s*"#?([0-9a-fA-F]{3,8})"`).exec(text)
     if (found) return '#' + found[1].toLowerCase()
   }
   return undefined
 }
 
-// Writes the colour into the project's .vscode/settings.json, changing only that one line.
-const saveColorIn = (dir, key, color) => {
+// Writes one string setting into the project's .vscode/settings.json, changing only its line, and only when
+// its value differs; true when written. A new setting goes on its own line after the last line matching
+// `beside`, else first in the file.
+const saveSettingIn = (dir, name, value, beside) => {
   const file = settingsFile(dir)
-  const name = `"peacock.${key}"`
-  let text = '{}\n'
-  try { text = fs.readFileSync(file, 'utf8') } catch {}
-  const line = new RegExp(`${name.replace('.', '\\.')}\\s*:\\s*"[^"]*"`)
-  if (line.test(text)) text = text.replace(line, `${name}: "${color}"`)
-  else if (/^\s*\{\s*\}\s*$/.test(text)) text = `{\n  ${name}: "${color}"\n}\n`
-  else text = text.replace('{', `{\n  ${name}: "${color}",`)
+  const text = read(dir) ?? '{}\n'
+  const line = new RegExp(`${quoted(name)}\\s*:\\s*"([^"]*)"`)
+  const found = line.exec(text)
+  if (found && found[1].toLowerCase() === value.toLowerCase()) return false
+  const entry = `"${name}": "${value}"`
+  const anchor = beside && [...text.matchAll(new RegExp(`^([ \\t]*)${beside}\\s*:\\s*"[^"]*"([ \\t]*,)?`, 'gm'))].pop()
+  let next
+  if (found) next = text.replace(line, entry)
+  else if (/^\s*\{\s*\}\s*$/.test(text)) next = `{\n  ${entry}\n}\n`
+  else if (anchor) {
+    const [whole, indent, comma] = anchor
+    const lines = `${whole.replace(/[ \t]*,$/, '')},\n${indent}${entry}${comma ? ',' : ''}`
+    next = text.slice(0, anchor.index) + lines + text.slice(anchor.index + whole.length)
+  } else next = text.replace('{', `{\n  ${entry},`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, text)
+  fs.writeFileSync(file, next)
+  return true
 }
 
-module.exports = { lighten, badgeShade, freeColor, colorIn, saveColorIn }
+const saveColorIn = (dir, key, color) => saveSettingIn(dir, `peacock.${key}`, color)
+// The accent beside the project's colour, where flow's terminal band reads it.
+const saveAccentIn = (dir, accent) => saveSettingIn(dir, 'projectColors.accent', accent, '"peacock\\.(?:remoteColor|color)"')
+
+module.exports = { lighten, accentOf, derivedAccent, ink, freeColor, colorIn, saveColorIn, saveAccentIn }

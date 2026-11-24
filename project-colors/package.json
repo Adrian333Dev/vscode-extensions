@@ -1,27 +1,64 @@
 {
   "name": "project-colors",
   "displayName": "Project colors",
-  "description": "In a window holding several projects, paints the window in the colour of the project you are working in, through Peacock, and shows the project's name in the status bar. Its \"bash (Flow)\" terminal profile names each terminal, so a revived one can resume its Claude Code session.",
+  "description": "In a window holding several projects, paints the window in the colour of the project you are working in, through Peacock, with its accent on the project name in the status bar. Its \"bash (Flow)\" terminal profile names each terminal, so a revived one can resume its Claude Code session.",
   "publisher": "adrian333dev",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/Adrian333Dev/vscode-extensions" },
-  "engines": { "vscode": "^1.93.0" },
-  "activationEvents": ["onStartupFinished", "onTerminalProfile:projectColors.flowTerminal"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Adrian333Dev/vscode-extensions"
+  },
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onTerminalProfile:projectColors.flowTerminal"
+  ],
   "main": "./extension.js",
-  "files": ["extension.js", "colors.js", "icon.png"],
+  "files": [
+    "extension.js",
+    "colors.js",
+    "icon.png"
+  ],
   "icon": "icon.png",
   "contributes": {
     "terminal": {
-      "profiles": [{ "id": "projectColors.flowTerminal", "title": "bash (Flow)", "icon": "terminal-bash" }]
+      "profiles": [
+        {
+          "id": "projectColors.flowTerminal",
+          "title": "bash (Flow)",
+          "icon": "terminal-bash"
+        }
+      ]
     },
     "commands": [
-      { "command": "projectColors.setup", "title": "Set up this workspace", "category": "Project colors" },
-      { "command": "projectColors.changeColor", "title": "Change this project's colour", "category": "Project colors" }
+      {
+        "command": "projectColors.setup",
+        "title": "Set up this workspace",
+        "category": "Project colors"
+      },
+      {
+        "command": "projectColors.changeColor",
+        "title": "Change this project's colour",
+        "category": "Project colors"
+      }
     ],
     "menus": {
-      "explorer/context": [{ "command": "projectColors.changeColor", "when": "explorerResourceIsFolder", "group": "z_projectColors" }],
-      "commandPalette": [{ "command": "projectColors.changeColor", "when": "false" }]
+      "explorer/context": [
+        {
+          "command": "projectColors.changeColor",
+          "when": "explorerResourceIsFolder",
+          "group": "z_projectColors"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "projectColors.changeColor",
+          "when": "false"
+        }
+      ]
     },
     "configuration": {
       "title": "Project colors",
@@ -30,6 +67,11 @@
           "type": "boolean",
           "default": false,
           "description": "Paint this window in the colour of the project you are working in. Set by \"Project colors: Set up this workspace\"."
+        },
+        "projectColors.accent": {
+          "type": "string",
+          "format": "color",
+          "description": "This project's accent: the bright colour paired with its window colour, shown on the status-bar badge and by flow's terminal band. Written by Project colors into each project's own settings; not set by hand."
         }
       }
     },
@@ -37,38 +79,99 @@
       "peacock.darkenLightenPercentage": 10,
       "peacock.affectTabActiveBackground": false,
       "peacock.showColorInStatusBar": false,
-      "peacock.excludedSettings": ["statusBarItem.remoteBackground"],
+      "peacock.excludedSettings": [
+        "statusBarItem.remoteBackground",
+        "activityBar.activeBorder",
+        "activityBarTop.activeBorder",
+        "activityBarBadge.background",
+        "activityBarBadge.foreground"
+      ],
       "peacock.favoriteColors": [
-        { "name": "Jet", "value": "#0a0908" },
-        { "name": "Charcoal", "value": "#14161a" },
-        { "name": "Gunmetal", "value": "#1b222a" },
-        { "name": "Steel", "value": "#222d30" },
-        { "name": "Wine", "value": "#1b0108" },
-        { "name": "Oxblood", "value": "#360a07" },
-        { "name": "Garnet", "value": "#49111c" },
-        { "name": "Crimson", "value": "#460a0a" },
-        { "name": "Rosewood", "value": "#3a2024" },
-        { "name": "Raspberry", "value": "#35111e" },
-        { "name": "Mahogany", "value": "#221010" },
-        { "name": "Rust", "value": "#4e1b0a" },
-        { "name": "Coffee", "value": "#211103" },
-        { "name": "Bronze", "value": "#2a2009" },
-        { "name": "Ochre", "value": "#412c05" },
-        { "name": "Sepia", "value": "#36281d" },
-        { "name": "Khaki", "value": "#252517" },
-        { "name": "Olive", "value": "#262c0e" },
-        { "name": "Moss", "value": "#112812" },
-        { "name": "Forest", "value": "#06130d" },
-        { "name": "Emerald", "value": "#062b19" },
-        { "name": "Jade", "value": "#10352c" },
-        { "name": "Teal", "value": "#002b31" },
-        { "name": "Ocean", "value": "#000e15" },
-        { "name": "Prussian", "value": "#003049" },
-        { "name": "Navy", "value": "#14213d" },
-        { "name": "Slate", "value": "#2a2c3c" },
-        { "name": "Amethyst", "value": "#231942" },
-        { "name": "Violet", "value": "#321b3e" },
-        { "name": "Aubergine", "value": "#2a0f23" }
+        {
+          "name": "Graphite",
+          "value": "#090b0c",
+          "accent": "#e5c07b"
+        },
+        {
+          "name": "Jet",
+          "value": "#0a0908",
+          "accent": "#ffb703"
+        },
+        {
+          "name": "Onyx",
+          "value": "#0c090c",
+          "accent": "#c4b5fd"
+        },
+        {
+          "name": "Charcoal",
+          "value": "#14161a",
+          "accent": "#67e8f9"
+        },
+        {
+          "name": "Gunmetal",
+          "value": "#1b222a",
+          "accent": "#7cb7ff"
+        },
+        {
+          "name": "Wine",
+          "value": "#1b0108",
+          "accent": "#fb7185"
+        },
+        {
+          "name": "Mahogany",
+          "value": "#221010",
+          "accent": "#ff8a65"
+        },
+        {
+          "name": "Oxblood",
+          "value": "#360a07",
+          "accent": "#ff6b4a"
+        },
+        {
+          "name": "Raspberry",
+          "value": "#35111e",
+          "accent": "#f472b6"
+        },
+        {
+          "name": "Crimson",
+          "value": "#380808",
+          "accent": "#f87171"
+        },
+        {
+          "name": "Burgundy",
+          "value": "#4d0218",
+          "accent": "#ff4d79"
+        },
+        {
+          "name": "Forest",
+          "value": "#06130d",
+          "accent": "#34d399"
+        },
+        {
+          "name": "Jade",
+          "value": "#0b2620",
+          "accent": "#5eead4"
+        },
+        {
+          "name": "Midnight",
+          "value": "#030712",
+          "accent": "#60a5fa"
+        },
+        {
+          "name": "Ocean",
+          "value": "#000e15",
+          "accent": "#38bdf8"
+        },
+        {
+          "name": "Navy",
+          "value": "#0e1729",
+          "accent": "#818cf8"
+        },
+        {
+          "name": "Aubergine",
+          "value": "#2a0f23",
+          "accent": "#e879f9"
+        }
       ],
       "window.title": "${rootNameShort}"
     }
