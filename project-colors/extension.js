@@ -10,14 +10,21 @@
 // - Each colour has an accent: the one paired with it in the favourites (`accent` beside `value`), else one
 //   derived from it (colors.js → accentOf). The status bar shows the project's name in capitals on the
 //   accent, as far left as an extension can put it (right after the remote item); the active tab's bottom
-//   line (the theme's divider between tab and editor) and the activity bar's active line take the accent too.
+//   line (the theme's divider between tab and editor), the activity bar's active line and the active terminal's
+//   mark in the terminal list (flow-v2's VS Code patch draws it from that colour) take the accent too.
 //   The activity bar's counts are a light neutral: most accents share their colour's hue, and a count in one
 //   blends into the bar (the user, 2026-11-24). The remote (WSL) item is painted the bar's own colour, so
 //   only the project badge stands out.
 // - The accent is saved into the project's .vscode/settings.json as `projectColors.accent`, beside its
 //   colour, where flow's terminal band reads it: on every paint, and when a colour is set or changed.
 // - The title bar is VS Code's own (the user, 2026-11-24: reset it); painting clears any title it once set.
-// - A colour changed through Peacock's own commands is saved back into the active project.
+// - A project's colour changes only through "Change this project's colour", which saves what the user picks. Any
+//   other colour Peacock writes (it echoes colours the window held a moment before) is put back: guessing the
+//   user's choice from Peacock's writes saved one project's colour into another three times (2026-11-24/25).
+// - Paints run one at a time, the latest asked for winning; the "Project colors" output channel logs each with
+//   its cause, and each colour Peacock wrote, so a wrong colour can be traced.
+// - On a machine with flow-v2, each window opened runs its VS Code patch check (`vscodePatch`): an update
+//   installs an unpatched VS Code often, and this runs right after one.
 // - A window not set up ("Project colors: Set up this workspace") is left alone.
 // - Its "bash (Flow)" terminal profile gives each new terminal its own `FLOW_TERMINAL` id; see `terminalProfile`
 //   below. It works in any window, set up or not. Not the default for now: as the default it broke terminal
@@ -31,7 +38,7 @@ const path = require('path')
 // (package.json), so Peacock neither overwrites nor clears them.
 const OURS = [
   'statusBarItem.warningBackground', 'statusBarItem.warningForeground', 'statusBarItem.remoteBackground',
-  'tab.activeBorder', 'activityBar.activeBorder', 'activityBarTop.activeBorder',
+  'tab.activeBorder', 'terminal.tab.activeBorder', 'activityBar.activeBorder', 'activityBarTop.activeBorder',
   'activityBarBadge.background', 'activityBarBadge.foreground',
 ]
 
@@ -84,14 +91,11 @@ const saveColor = (project, color) => {
 // --- painting ---
 
 let badge
+let log // the "Project colors" output channel
+const say = (line) => log?.info(line)
 let active // the project the window is painted for
 let painted // the colour last written to Peacock
-let replaced // the window's colour before that write
-
-// Peacock, on any change to its settings, writes back the colour it read at that moment, which can be the
-// window's colour from before our paint (on a reload: the last project's). Only a colour that is neither
-// ours nor that old one is the user's choice.
-const isUsersChoice = (color, ours, old) => Boolean(color) && color !== ours && color !== old
+let choosing = false // the user is picking a colour through changeColor
 const windowColor = () => (vscode.workspace.getConfiguration('peacock').inspect(keys()[0])?.workspaceValue || '').toLowerCase() || undefined
 
 const update = async (section, key, value) => {
@@ -113,6 +117,7 @@ const ourColors = (color) => {
     'statusBarItem.warningForeground': ink(accent),
     'statusBarItem.remoteBackground': color,
     'tab.activeBorder': accent,
+    'terminal.tab.activeBorder': accent,
     'activityBar.activeBorder': accent,
     'activityBarTop.activeBorder': accent,
     'activityBarBadge.background': COUNT,
@@ -128,12 +133,37 @@ const setOurColors = async (color) => {
   await update('workbench', 'colorCustomizations', Object.keys(current).length ? current : undefined)
 }
 
-const paint = async (project) => {
+// One paint at a time: two at once (a terminal, then a tab, clicked quickly) interleave their writes and can leave
+// the window on the wrong project. A paint asked for while one runs waits, and only the latest asked for runs.
+let wanted // { project, why } asked for, not started yet
+let running // the loop painting, while it runs
+let target // the project the window is painted, or about to be painted, for
+const paint = (project, why) => {
+  wanted = { project, why }
+  target = project
+  running ??= (async () => {
+    try {
+      while (wanted) {
+        const next = wanted
+        wanted = undefined
+        await paintNow(next.project, next.why)
+      }
+    } finally {
+      running = undefined
+    }
+    // Peacock events that landed mid-paint were skipped: check the colour once it is all written.
+    await peacockChanged()
+  })()
+  return running
+}
+
+const paintNow = async (project, why) => {
   if (!following()) return
-  // Both before the first await: a Peacock event landing mid-paint must find them set together.
+  say(`paint ${project ? project.name : 'nothing'} (${why})`)
+  // Set before the first await: a Peacock event landing mid-paint must find them.
   active = project
-  replaced = windowColor()
   painted = project && !project.workspace ? colorOf(project) : undefined
+  putBack = 0
   if (!project) {
     badge.hide()
     await setOurColors(undefined)
@@ -169,15 +199,17 @@ const activeTabFile = () => {
 }
 const anyTabOpen = () => vscode.window.tabGroups.all.some((g) => g.tabs.length)
 
-const followTab = () => {
-  if (!anyTabOpen()) return paint(undefined)
-  const project = projectOf(activeTabFile())
-  if (project && project.dir !== active?.dir) return paint(project)
+const followTab = (why) => {
+  if (!anyTabOpen()) return paint(undefined, `${why}: no tab open`)
+  const file = activeTabFile()
+  const project = projectOf(file)
+  if (project && project.dir !== target?.dir) return paint(project, `${why}: ${file}`)
 }
-const followTerminal = (terminal) => {
+const followTerminal = (terminal, why) => {
   const cwd = terminal?.shellIntegration?.cwd || terminal?.creationOptions?.cwd
-  const project = projectOf(typeof cwd === 'string' ? cwd : cwd?.fsPath)
-  if (project) return paint(project)
+  const dir = typeof cwd === 'string' ? cwd : cwd?.fsPath
+  const project = projectOf(dir)
+  if (project && project.dir !== target?.dir) return paint(project, `${why}: terminal "${terminal.name}" in ${dir}`)
 }
 
 // --- terminals ---
@@ -211,15 +243,15 @@ const setup = async () => {
     }
   }
   for (const p of all) saveAccent(p, colorOf(p))
-  active = undefined
-  await followTab()
+  active = target = undefined
+  await followTab('set up')
 }
 
 const changeColor = async (uri) => {
   if (!following()) return vscode.window.showWarningMessage('Project colors: run "Set up this workspace" first.')
   const project = uri && projects().find((p) => p.dir === uri.fsPath)
   if (!project) return vscode.window.showWarningMessage('Project colors: right-click a project folder at the top of the Explorer.')
-  await paint(project)
+  await paint(project, 'change colour')
   const choice = await vscode.window.showQuickPick(
     [
       { label: 'A favourite colour', command: 'peacock.changeColorToFavorite' },
@@ -229,16 +261,31 @@ const changeColor = async (uri) => {
     ],
     { title: `Colour of ${project.name}` },
   )
-  if (choice) await vscode.commands.executeCommand(choice.command)
+  if (!choice) return
+  choosing = true
+  try {
+    await vscode.commands.executeCommand(choice.command)
+  } finally {
+    choosing = false
+  }
+  const color = windowColor()
+  if (!color || color === colorOf(project)) return
+  say(`${project.name}'s colour set to ${color}`)
+  saveColor(project, color)
+  await paint(project, 'colour chosen')
 }
 
-// A colour Peacock wrote that this extension didn't: the user changed it, so the project keeps it.
+// A colour Peacock wrote that this extension didn't, outside changeColor: ours goes back, a few times at most per
+// paint, so a Peacock that keeps writing can't start a loop.
+let putBack = 0
 const peacockChanged = async () => {
-  if (!following() || !active || active.workspace) return
+  if (!following() || !active || running || choosing) return
   const color = windowColor()
-  if (!isUsersChoice(color, painted, replaced)) return
-  saveColor(active, color)
-  await paint(active)
+  if (color === painted) return
+  if (putBack >= 3) return say(`Peacock wrote ${color || 'none'} again: left as it is, ${active.name}'s is ${painted || 'none'}`)
+  putBack++
+  say(`Peacock wrote ${color || 'none'}: ${active.name}'s ${painted || 'none'} put back`)
+  await update('peacock', keys()[0], painted)
 }
 
 exports.activate = (context) => {
@@ -248,29 +295,53 @@ exports.activate = (context) => {
   // pass is MAX_SAFE_INTEGER (Infinity reaches the window as JSON, null), which puts the badge right after it.
   badge = vscode.window.createStatusBarItem('projectColors.name', vscode.StatusBarAlignment.Left, Number.MAX_SAFE_INTEGER)
   badge.name = 'Project name'
+  log = vscode.window.createOutputChannel('Project colors', { log: true })
   context.subscriptions.push(
     badge,
+    log,
     vscode.commands.registerCommand('projectColors.setup', () => setup().catch(report)),
     vscode.commands.registerCommand('projectColors.changeColor', (uri) => changeColor(uri).catch(report)),
-    vscode.window.tabGroups.onDidChangeTabs(() => followTab()?.catch(report)),
-    vscode.window.tabGroups.onDidChangeTabGroups(() => followTab()?.catch(report)),
-    vscode.window.onDidChangeActiveTerminal((t) => followTerminal(t)?.catch(report)),
+    vscode.window.tabGroups.onDidChangeTabs(() => followTab('tabs changed')?.catch(report)),
+    vscode.window.tabGroups.onDidChangeTabGroups(() => followTab('tab groups changed')?.catch(report)),
+    vscode.window.onDidChangeActiveTerminal((t) => followTerminal(t, 'terminal focused')?.catch(report)),
     // A terminal opened on a profile knows its folder only once shell integration starts. The event also
     // fires on each `cd`, which is left alone, as before.
     vscode.window.onDidChangeTerminalShellIntegration((e) => {
       if (integrated.has(e.terminal)) return
       integrated.add(e.terminal)
-      if (e.terminal === vscode.window.activeTerminal) followTerminal(e.terminal)?.catch(report)
+      if (e.terminal === vscode.window.activeTerminal) followTerminal(e.terminal, 'terminal started')?.catch(report)
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(`peacock.${keys()[0]}`)) peacockChanged().catch(report)
     }),
   )
-  followTab()?.catch(report)
+  followTab('window opened')?.catch(report)
+  vscodePatch()
 }
 exports.deactivate = () => {}
 
-const report = (error) => console.error('project-colors:', error)
+// flow-v2's patches to VS Code (scripts/patch-vscode.ts: terminal layout kept across a WSL restart, the active
+// terminal marked in the terminal list). After an update VS Code runs unpatched; this patches the new version and
+// offers the reload that loads it. Quiet when nothing is new or flow-v2 isn't on the machine.
+const vscodePatch = () => {
+  const script = path.join(require('os').homedir(), 'code/flow-v2/scripts/patch-vscode.ts')
+  if (!fs.existsSync(script)) return
+  require('child_process').execFile(process.execPath, [script, '--hook'], { timeout: 60000 }, async (error, stdout) => {
+    if (error) return report(error)
+    const lines = stdout.trim()
+    if (!lines) return
+    say(lines)
+    const failed = lines.includes('failed')
+    const show = failed ? vscode.window.showWarningMessage : vscode.window.showInformationMessage
+    const answer = await show(`${lines}${failed ? '' : ' Reload the window to use it.'}`, ...(failed ? [] : ['Reload']))
+    if (answer === 'Reload') vscode.commands.executeCommand('workbench.action.reloadWindow')
+  })
+}
+
+const report = (error) => {
+  console.error('project-colors:', error)
+  log?.error(String(error?.stack || error))
+}
 
 // For tests/extension.test.js: the parts that need no window.
-exports.internal = { isUsersChoice, lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile }
+exports.internal = { lighten, ink, accentOf, freeColor, projectOf, colorOf, saveColor, saveAccent, OURS, ourColors, setOurColors, PROFILE, terminalProfile }
