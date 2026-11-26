@@ -1,0 +1,239 @@
+{
+  "name": "flow",
+  "displayName": "Flow",
+  "description": "In a window holding several projects: paints the window in the colour of the project whose file you are working in, with its accent on the project name in the status bar, and shows one project at a time in the Explorer. Its \"bash (Flow)\" terminal profile names each terminal, so a revived one can resume its Claude Code session.",
+  "publisher": "adrian333dev",
+  "version": "0.12.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Adrian333Dev/vscode-extensions"
+  },
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onTerminalProfile:flow.terminal"
+  ],
+  "main": "./extension.js",
+  "files": [
+    "extension.js",
+    "colors.js",
+    "explorer.js",
+    "icon.png"
+  ],
+  "icon": "icon.png",
+  "contributes": {
+    "terminal": {
+      "profiles": [
+        {
+          "id": "flow.terminal",
+          "title": "bash (Flow)",
+          "icon": "terminal-bash"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "flow.setup",
+        "title": "Set up this workspace",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.changeColor",
+        "title": "Change this project's colour",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.pickProject",
+        "title": "Switch project",
+        "category": "Flow",
+        "icon": "$(repo)"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "flow.changeColor",
+          "when": "explorerResourceIsFolder",
+          "group": "z_flow"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "flow.changeColor",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "flow.pickProject",
+          "when": "view == workbench.explorer.fileView && config.flow.follow",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Flow",
+      "properties": {
+        "flow.follow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Paint this window in the colour of the project you are working in. Set by \"Flow: Set up this workspace\"."
+        },
+        "flow.accent": {
+          "type": "string",
+          "format": "color",
+          "description": "This project's accent: the bright colour paired with its window colour, shown on the status-bar badge and by flow's terminal band. Written by Flow into each project's own settings; not set by hand."
+        },
+        "flow.favorites": {
+          "type": "array",
+          "default": [
+            {
+              "name": "Graphite",
+              "value": "#090b0c",
+              "accent": "#e5c07b"
+            },
+            {
+              "name": "Jet",
+              "value": "#0a0908",
+              "accent": "#ffb703"
+            },
+            {
+              "name": "Onyx",
+              "value": "#0c090c",
+              "accent": "#c4b5fd"
+            },
+            {
+              "name": "Charcoal",
+              "value": "#14161a",
+              "accent": "#67e8f9"
+            },
+            {
+              "name": "Gunmetal",
+              "value": "#1b222a",
+              "accent": "#7cb7ff"
+            },
+            {
+              "name": "Wine",
+              "value": "#1b0108",
+              "accent": "#fb7185"
+            },
+            {
+              "name": "Mahogany",
+              "value": "#221010",
+              "accent": "#ff8a65"
+            },
+            {
+              "name": "Oxblood",
+              "value": "#360a07",
+              "accent": "#ff6b4a"
+            },
+            {
+              "name": "Raspberry",
+              "value": "#35111e",
+              "accent": "#f472b6"
+            },
+            {
+              "name": "Crimson",
+              "value": "#380808",
+              "accent": "#f87171"
+            },
+            {
+              "name": "Burgundy",
+              "value": "#4d0218",
+              "accent": "#ff4d79"
+            },
+            {
+              "name": "Forest",
+              "value": "#06130d",
+              "accent": "#34d399"
+            },
+            {
+              "name": "Jade",
+              "value": "#0b2620",
+              "accent": "#5eead4"
+            },
+            {
+              "name": "Midnight",
+              "value": "#030712",
+              "accent": "#60a5fa"
+            },
+            {
+              "name": "Ocean",
+              "value": "#000e15",
+              "accent": "#38bdf8"
+            },
+            {
+              "name": "Navy",
+              "value": "#0e1729",
+              "accent": "#818cf8"
+            },
+            {
+              "name": "Aubergine",
+              "value": "#2a0f23",
+              "accent": "#e879f9"
+            }
+          ],
+          "description": "The colours offered to projects, dark ones for the window, each with its accent: the bright colour shown on the project badge, the accent lines and flow's terminal band."
+        },
+        "flow.color": {
+          "type": "string",
+          "format": "color",
+          "description": "This project's colour, in the project's own settings. Written by Flow (\"Change this project's colour\"); not set by hand."
+        },
+        "flow.explorer.followFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "A file opened (or a tab switched to) from a project the Explorer hides switches the Explorer to that project."
+        },
+        "flow.explorer.searchEveryProject": {
+          "type": "boolean",
+          "default": true,
+          "description": "Search and Ctrl+P keep every project while the Explorer shows one. Off: they cover only what the Explorer shows."
+        },
+        "flow.explorer.hideWorkspaceFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "A project picked in the Explorer hides the workspace's own files too (.flow, workspace.md, …). Off: they stay beside the project."
+        },
+        "flow.explorer.paintOnPick": {
+          "type": "boolean",
+          "default": true,
+          "description": "Picking a project in the Explorer paints the window in its colour and names it on the status bar badge, also with no file open. Off: the colour follows the open file only."
+        },
+        "flow.explorer.sourceControl": {
+          "type": "boolean",
+          "default": true,
+          "description": "Source Control shows only the picked project's repositories (the project and its .flow), or the workspace's for \"Workspace\"; \"All\" shows every one. The others are closed in Git while hidden: their changes don't show in the Explorer, the editor margin or the status bar until picked. Git in the terminal is unaffected."
+        },
+        "flow.explorer.pick": {
+          "type": "string",
+          "description": "The project the Explorer shows, \"(workspace)\" for the workspace's own files; none for everything. Written by \"Flow: Switch project\"; not set by hand."
+        },
+        "flow.explorer.hidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The files.exclude entries the switcher wrote, so it removes only its own. Not set by hand."
+        },
+        "flow.explorer.closedRepositories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The Git repositories the switcher closed, relative to the window's folder, so it reopens only its own. Not set by hand."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "flow.pickProject",
+        "key": "ctrl+alt+p",
+        "when": "config.flow.follow"
+      }
+    ]
+  }
+}

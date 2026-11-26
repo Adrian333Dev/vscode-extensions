@@ -4,30 +4,26 @@
 //
 // A project that already has a colour keeps it. Otherwise it gets the favourite farthest from the colours of
 // the other git repos beside it (its workspace), written into its .vscode/settings.json with its accent
-// (`projectColors.accent`). Either way the colour is printed. The key is the one Peacock paints from:
-// remoteColor under WSL, else color.
+// (`flow.accent`). Either way the colour is printed.
 const fs = require('fs')
 const path = require('path')
 const colors = require('./colors')
 
-const defaults = require('./package.json').contributes.configurationDefaults
-const favorites = defaults['peacock.favoriteColors']
-const percent = defaults['peacock.darkenLightenPercentage']
+const favorites = require('./package.json').contributes.configuration.properties['flow.favorites'].default
 
-const pick = (dir, remote) => {
-  const keys = remote ? ['remoteColor', 'color'] : ['color', 'remoteColor']
-  const own = colors.colorIn(dir, keys)
+const pick = (dir) => {
+  const own = colors.colorIn(dir)
   if (own) return { color: own, written: false }
   const parent = path.dirname(dir)
   let siblings = []
-  try { siblings = fs.readdirSync(parent, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => path.join(parent, d.name)) } catch {}
+  try { siblings = fs.readdirSync(parent, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith('.')).map((d) => path.join(parent, d.name)) } catch {}
   const used = siblings
     .filter((d) => d !== dir && fs.existsSync(path.join(d, '.git')))
-    .map((d) => colors.colorIn(d, keys))
+    .map((d) => colors.colorIn(d))
     .filter(Boolean)
-  const color = colors.freeColor(favorites.map((f) => f.value), used, percent)
+  const color = colors.freeColor(favorites.map((f) => f.value), used, colors.LIGHTEN)
   if (!color) return { color: undefined, written: false }
-  colors.saveColorIn(dir, keys[0], color)
+  colors.saveColorIn(dir, color)
   colors.saveAccentIn(dir, colors.accentOf(color, favorites))
   return { color, written: true }
 }
@@ -38,9 +34,9 @@ if (require.main === module) {
     console.error('usage: pick-color.js <project folder>')
     process.exit(2)
   }
-  const { color } = pick(path.resolve(target), Boolean(process.env.WSL_DISTRO_NAME))
+  const { color } = pick(path.resolve(target))
   if (!color) {
-    console.error('no free colour left: set one by hand with Peacock')
+    console.error('no free colour left: set one with "Change this project\'s colour"')
     process.exit(1)
   }
   console.log(color)

@@ -25,6 +25,13 @@ for name in "${names[@]}"; do
   if (cd "$name" && npx --yes @vscode/vsce package --allow-missing-repository --skip-license -o "../.build/$name.vsix") \
      && code --install-extension ".build/$name.vsix" --force; then
     echo "installed $name"
+    # flow was workspace-projects before 0.10.0 and project-colors before 0.7.0: two copies would both paint and
+    # both claim Ctrl+Alt+P.
+    if [ "$name" = flow ]; then
+      for old in adrian333dev.project-colors adrian333dev.workspace-projects; do
+        if code --list-extensions 2>/dev/null | grep -Fx "$old" >/dev/null; then code --uninstall-extension "$old"; fi
+      done
+    fi
   else
     echo "FAILED $name" >&2; failed=1
   fi

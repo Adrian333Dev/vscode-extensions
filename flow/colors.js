@@ -34,7 +34,7 @@ const fromHsl = (h, s, l) => {
   return toHex([hue(h + 1 / 3), hue(h), hue(h - 1 / 3)])
 }
 
-// Peacock's lighten (tinycolor2): add the percentage to HSL lightness.
+// tinycolor2's lighten, as Peacock used it: add the percentage to HSL lightness.
 const lighten = (hex, percent) => {
   const [h, s, l] = toHsl(hex)
   return fromHsl(h, s, Math.min(1, l + percent / 100))
@@ -43,7 +43,7 @@ const lighten = (hex, percent) => {
 // The accent of a project colour: the one paired with it in the favourites (`accent` beside `value`), else
 // one derived from it (its hue at HSL S80% L60%; a grey, under S25%, gives silver), so a colour picked by
 // hand still gets one. The window shows it (status-bar badge, active tab and activity bar lines, activity
-// bar count) and flow's terminal band reads it from `projectColors.accent`.
+// bar count) and flow's terminal band reads it from `flow.accent`.
 const SILVER = '#d4d8de'
 const derivedAccent = (hex) => {
   const [h, s] = toHsl(hex)
@@ -62,6 +62,40 @@ const luminance = (hex) => {
 const ink = (background) => {
   const l = luminance(background)
   return (l + 0.05) / 0.05 > 1.05 / (l + 0.05) ? '#000000' : '#ffffff'
+}
+
+// The window's colours for a project colour, as Peacock painted them (its defaults, lighter shade 10%), so the
+// look stayed when this extension took over painting (the user, 2026-11-25): title and status bars in the colour,
+// the activity bar in the lighter shade, light text on a dark colour, dark text on a light one.
+const LIGHTEN = 10
+const windowColors = (color) => {
+  const lighter = lighten(color, LIGHTEN)
+  const fore = ink(color) === '#ffffff' ? '#e7e7e7' : '#15202b'
+  const faded = `${fore}99`
+  const bar = (prefix) => ({
+    [`${prefix}.activeBackground`]: lighter,
+    [`${prefix}.background`]: lighter,
+    [`${prefix}.foreground`]: fore,
+    [`${prefix}.inactiveForeground`]: faded,
+  })
+  return {
+    ...bar('activityBar'),
+    ...bar('activityBarTop'),
+    'commandCenter.border': faded,
+    'commandCenter.foreground': fore,
+    'sash.hoverBorder': lighter,
+    'statusBar.background': color,
+    'statusBar.debuggingBackground': color,
+    'statusBar.debuggingForeground': fore,
+    'statusBar.foreground': fore,
+    'statusBar.inactiveBackground': color,
+    'statusBarItem.hoverBackground': lighter,
+    'statusBarItem.remoteForeground': fore,
+    'titleBar.activeBackground': color,
+    'titleBar.activeForeground': fore,
+    'titleBar.inactiveBackground': `${color}99`,
+    'titleBar.inactiveForeground': faded,
+  }
 }
 
 // OKLab, where distance matches how different 2 colours look.
@@ -92,13 +126,18 @@ const read = (dir) => {
   try { return fs.readFileSync(settingsFile(dir), 'utf8') } catch { return undefined }
 }
 
-// The project's own colour under the first of `keys` it holds (remoteColor, color). Read from the file:
-// VS Code doesn't read settings in a subfolder.
-const colorIn = (dir, keys) => {
+// The project's own colour, `flow.color`; still read: `projectColors.color` (before 0.7.0, when the
+// extension was project-colors) and the keys Peacock painted from (before 0.5.0). Read from the file: VS Code
+// doesn't read settings in a subfolder.
+const COLOR = 'flow.color'
+const ACCENT = 'flow.accent'
+// Older names: workspace-projects (0.7.0 to 0.9.x), project-colors (before 0.7.0).
+const OLD = { [COLOR]: ['workspaceProjects.color', 'projectColors.color'], [ACCENT]: ['workspaceProjects.accent', 'projectColors.accent'] }
+const colorIn = (dir) => {
   const text = read(dir)
   if (!text) return undefined
-  for (const key of keys) {
-    const found = new RegExp(`${quoted(`peacock.${key}`)}\\s*:\\s*"#?([0-9a-fA-F]{3,8})"`).exec(text)
+  for (const key of [COLOR, ...OLD[COLOR], 'peacock.remoteColor', 'peacock.color']) {
+    const found = new RegExp(`${quoted(key)}\\s*:\\s*"#?([0-9a-fA-F]{3,8})"`).exec(text)
     if (found) return '#' + found[1].toLowerCase()
   }
   return undefined
@@ -128,8 +167,20 @@ const saveSettingIn = (dir, name, value, beside) => {
   return true
 }
 
-const saveColorIn = (dir, key, color) => saveSettingIn(dir, `peacock.${key}`, color)
+const saveColorIn = (dir, color) => saveSettingIn(dir, COLOR, color)
 // The accent beside the project's colour, where flow's terminal band reads it.
-const saveAccentIn = (dir, accent) => saveSettingIn(dir, 'projectColors.accent', accent, '"peacock\\.(?:remoteColor|color)"')
+const saveAccentIn = (dir, accent) => saveSettingIn(dir, ACCENT, accent, quoted(COLOR))
 
-module.exports = { lighten, accentOf, derivedAccent, ink, freeColor, colorIn, saveColorIn, saveAccentIn }
+// Renames the project's colour and accent from their older names, in place; true when written.
+const renameOldIn = (dir) => {
+  const text = read(dir)
+  if (!text) return false
+  let next = text
+  for (const [now, olds] of Object.entries(OLD))
+    for (const old of olds) if (!new RegExp(quoted(now)).test(next)) next = next.replace(new RegExp(quoted(old)), `"${now}"`)
+  if (next === text) return false
+  fs.writeFileSync(settingsFile(dir), next)
+  return true
+}
+
+module.exports = { LIGHTEN, lighten, windowColors, accentOf, derivedAccent, ink, freeColor, colorIn, saveColorIn, saveAccentIn, renameOldIn }
